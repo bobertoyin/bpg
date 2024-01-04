@@ -1,13 +1,16 @@
+//! Command line arguments.
 use std::path::PathBuf;
 
 use clap::Parser;
-use num::rational::Ratio;
 
+/**
+ * Command line arguments.
+ */
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// Image file paths.
     pub files: Vec<PathBuf>,
     #[clap(short, long, default_value_t = 400)]
+    /// Border size, in pixels.
     pub border: u32,
-    #[clap(short, long)]
-    pub ratio: Option<Ratio<u32>>,
 }
