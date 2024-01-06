@@ -13,19 +13,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        lfs: true
     - name: Build
       run: cargo build --verbose
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        lfs: true
     - name: Test
       run: cargo test --verbose
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+      with:
+        lfs: true
     - name: Format
       run: cargo fmt --check --verbose 
     - name: Clippy
