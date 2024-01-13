@@ -15,21 +15,26 @@ fn main() {
 
     if !args.files.is_empty() {
         files.par_extend(args.files);
+
+        let results: Vec<(&Path, ImageResult<()>)> = files
+            .par_iter()
+            .map(|file| {
+                (
+                    file.as_path(),
+                    process_and_save_local(
+                        file.as_path(),
+                        args.border,
+                        args.force_ratio,
+                        args.force_orientation,
+                    ),
+                )
+            })
+            .collect();
+
+        results
+            .into_par_iter()
+            .for_each(|(path, result)| report_result(path, &result));
     }
-
-    let results: Vec<(&Path, ImageResult<()>)> = files
-        .par_iter()
-        .map(|file| {
-            (
-                file.as_path(),
-                process_and_save_local(file.as_path(), args.border),
-            )
-        })
-        .collect();
-
-    results
-        .into_par_iter()
-        .for_each(|(path, result)| report_result(path, &result));
 }
 
 fn report_result(path: &Path, result: &ImageResult<()>) {

@@ -38,17 +38,26 @@ pub static COMMON_RATIOS: Lazy<Vec<Ratio<u32>>> = Lazy::new(|| {
 /// # Args
 /// * `file` - The image's file path.
 /// * `border` - The border size in pixels.
-pub fn process_and_save_local(file: &Path, border: u32) -> ImageResult<()> {
+/// * `force_ratio` - The ratio to force, or none if the ratio should be guessed.
+/// * `force_orientation` - Whether to force the orientation when the ratio is forced.
+pub fn process_and_save_local(
+    file: &Path,
+    border: u32,
+    force_ratio: Option<Ratio<u32>>,
+    force_orientation: bool,
+) -> ImageResult<()> {
     let image = Reader::open(file)?.decode()?;
-    add_border(
-        &image,
-        adjust(
-            image.dimensions(),
-            border,
-            approximation(image.dimensions(), &COMMON_RATIOS),
-        ),
-    )
-    .save(file_name(file))
+    let final_ratio = match force_ratio {
+        Some(ratio) => {
+            if force_orientation {
+                ratio
+            } else {
+                approximation(image.dimensions(), &[ratio, ratio.recip()])
+            }
+        }
+        None => approximation(image.dimensions(), &COMMON_RATIOS),
+    };
+    add_border(&image, adjust(image.dimensions(), border, final_ratio)).save(file_name(file))
 }
 
 /// Generate a new file name for an image that is to be bordered.
