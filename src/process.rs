@@ -38,17 +38,26 @@ pub static COMMON_RATIOS: Lazy<Vec<Ratio<u32>>> = Lazy::new(|| {
 /// # Args
 /// * `file` - The image's file path.
 /// * `border` - The border size in pixels.
-pub fn process_and_save_local(file: &Path, border: u32) -> ImageResult<()> {
+/// * `force_ratio` - The ratio to force, or none if the ratio should be guessed.
+/// * `force_orientation` - Whether to force the orientation when the ratio is forced.
+pub fn process_and_save_local(
+    file: &Path,
+    border: u32,
+    force_ratio: Option<Ratio<u32>>,
+    force_orientation: bool,
+) -> ImageResult<()> {
     let image = Reader::open(file)?.decode()?;
-    add_border(
-        &image,
-        adjust(
-            image.dimensions(),
-            border,
-            approximation(image.dimensions(), &COMMON_RATIOS),
-        ),
-    )
-    .save(file_name(file))
+    let final_ratio = match force_ratio {
+        Some(ratio) => {
+            if force_orientation {
+                ratio
+            } else {
+                approximation(image.dimensions(), &[ratio, ratio.recip()])
+            }
+        }
+        None => approximation(image.dimensions(), &COMMON_RATIOS),
+    };
+    add_border(&image, adjust(image.dimensions(), border, final_ratio)).save(file_name(file))
 }
 
 /// Generate a new file name for an image that is to be bordered.
@@ -82,7 +91,7 @@ fn file_name(file: &Path) -> PathBuf {
 /// * `final_dims` - The final dimensions (width and height) of the bordered image.
 fn add_border(image: &DynamicImage, final_dims: (u32, u32)) -> DynamicImage {
     let (width, height) = final_dims;
-    let mut background = RgbaImage::from_pixel(width, height, Rgba([255, 255, 255, 0]));
+    let mut background = RgbaImage::from_pixel(width, height, Rgba([255, 255, 255, 255]));
     let x_offset = (width - image.width()) / 2;
     let y_offset = (height - image.height()) / 2;
     overlay(&mut background, image, x_offset as i64, y_offset as i64);
@@ -171,7 +180,7 @@ mod tests {
 
     #[fixture]
     fn base_pixel() -> Rgba<u8> {
-        Rgba([0, 0, 0, 100])
+        Rgba([0, 0, 0, 255])
     }
 
     #[fixture]
@@ -190,23 +199,23 @@ mod tests {
     #[rstest]
     #[case(
         (2, 2),
-        DynamicImage::ImageRgba8(RgbaImage::from_vec(2, 2, vec![0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100]).unwrap()),
+        DynamicImage::ImageRgba8(RgbaImage::from_vec(2, 2, vec![0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255]).unwrap()),
     )]
     #[case(
         (2, 3),
-        DynamicImage::ImageRgba8(RgbaImage::from_vec(2, 3, vec![0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 255, 255, 255, 0, 255, 255, 255, 0]).unwrap()),
+        DynamicImage::ImageRgba8(RgbaImage::from_vec(2, 3, vec![0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255]).unwrap()),
     )]
     #[case(
         (2, 4),
-        DynamicImage::ImageRgba8(RgbaImage::from_vec(2, 4, vec![255, 255, 255, 0, 255, 255, 255, 0, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100, 255, 255, 255, 0, 255, 255, 255, 0]).unwrap()),
+        DynamicImage::ImageRgba8(RgbaImage::from_vec(2, 4, vec![255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255]).unwrap()),
     )]
     #[case(
         (3, 2),
-        DynamicImage::ImageRgba8(RgbaImage::from_vec(3, 2, vec![0, 0, 0, 100, 0, 0, 0, 100, 255, 255, 255, 0, 0, 0, 0, 100, 0, 0, 0, 100, 255, 255, 255, 0]).unwrap()),
+        DynamicImage::ImageRgba8(RgbaImage::from_vec(3, 2, vec![0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255]).unwrap()),
     )]
     #[case(
         (4, 2),
-        DynamicImage::ImageRgba8(RgbaImage::from_vec(4, 2, vec![255, 255, 255, 0, 0, 0, 0, 100, 0, 0, 0, 100, 255, 255, 255, 0, 255, 255, 255, 0, 0, 0, 0, 100, 0, 0, 0, 100, 255, 255, 255, 0]).unwrap()),
+        DynamicImage::ImageRgba8(RgbaImage::from_vec(4, 2, vec![255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255, 255]).unwrap()),
     )]
     fn test_add_border(
         base_image: DynamicImage,
@@ -220,7 +229,7 @@ mod tests {
     fn test_add_border_transparent_base(#[with(Rgba([0, 0, 0, 0]))] base_image: DynamicImage) {
         assert_eq!(
             add_border(&base_image, (12, 24)),
-            DynamicImage::ImageRgba8(RgbaImage::from_pixel(12, 24, Rgba([255, 255, 255, 0])))
+            DynamicImage::ImageRgba8(RgbaImage::from_pixel(12, 24, Rgba([255, 255, 255, 255])))
         );
     }
 
